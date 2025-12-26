@@ -1,0 +1,19 @@
+{
+    "model_name": "HyDengue",
+    "model_type": "StackingClassifier (SVM + MLP)",
+    "features_used": [
+        "RBC",
+        "Hemoglobin(g/dl)",
+        "HCT(%)",
+        "RDW-CV(%)",
+        "Total WBC count(/cumm)",
+        "Neutrophils(%)",
+        "Total Platelet Count(/cumm)",
+        "Age"
+    ],
+    "num_features": 8,
+    "training_date": "2025-12-26 13:59:05",
+    "accuracy": 0.973741794310722,
+    "roc_auc": 0.9978244127839815,
+    "avg_precision": 0.9976165941912182
+}

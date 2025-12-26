@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HyDengue - Dengue Fever Prediction System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel - Input Form -->
+        <div class="left-panel">
+            <div class="header">
+                <h1><i class="fas fa-virus"></i> HyDengue AI</h1>
+                <p>Advanced Dengue Fever Prediction System</p>
+            </div>
+            
+            <div class="input-section" id="inputSection">
+                {% for feature in selected_features %}
+                <div class="input-group">
+                    <label for="{{ feature }}">
+                        {{ feature }}
+                        {% if feature in reference_ranges %}
+                        <span class="unit">
+                            (Ref: {{ reference_ranges[feature].min }}-{{ reference_ranges[feature].max }} {{ reference_ranges[feature].unit }})
+                        </span>
+                        {% endif %}
+                    </label>
+                    <input type="number" 
+                           id="{{ feature }}" 
+                           name="{{ feature }}" 
+                           step="0.01"
+                           placeholder="Enter value"
+                           {% if feature in reference_ranges %}
+                           min="{{ reference_ranges[feature].min }}"
+                           max="{{ reference_ranges[feature].max }}"
+                           {% endif %}>
+                </div>
+                {% endfor %}
+                
+                <!-- Gender -->
+                <div class="input-group">
+                    <label for="Gender">Gender</label>
+                    <select id="Gender" name="Gender">
+                        <option value="1">Male</option>
+                        <option value="0">Female</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="predictDengue()">
+                    <i class="fas fa-heartbeat"></i> Predict Dengue Risk
+                </button>
+                <button class="btn btn-secondary" onclick="resetForm()">
+                    <i class="fas fa-redo"></i> Reset Form
+                </button>
+                <button class="btn btn-success" onclick="downloadReport()" id="downloadBtn" style="display: none;">
+                    <i class="fas fa-file-pdf"></i> Download Report
+                </button>
+            </div>
+            
+            <!-- Loading Spinner -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Analyzing hematological parameters...</p>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Results -->
+        <div class="right-panel">
+            <div class="results-container">
+                <div class="results-header">
+                    <h2>Prediction Results</h2>
+                    <p>Real-time dengue fever risk assessment</p>
+                </div>
+                
+                <div class="prediction-result" id="predictionResult" style="display: none;">
+                    <h3 id="resultText">No prediction yet</h3>
+                    
+                    <!-- Confidence/Reliability Indicator -->
+                    <div class="confidence-section">
+                        <h4><i class="fas fa-chart-line"></i> Confidence / Reliability Indicator</h4>
+                        <div class="reliability-meter">
+                            <div class="reliability-bar">
+                                <div class="reliability-fill" id="reliabilityFill"></div>
+                            </div>
+                            <div class="reliability-labels">
+                                <span>Low</span>
+                                <span>Moderate</span>
+                                <span>High</span>
+                                <span>Very High</span>
+                            </div>
+                        </div>
+                        <div class="reliability-info">
+                            <span id="reliabilityText">Reliability: <strong id="reliabilityValue">-</strong></span>
+                            <span>Confidence: <strong id="confidenceValue">0</strong>%</span>
+                            <span>Risk: <strong id="riskLevel">-</strong></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Factors Influencing Prediction -->
+                <div class="factors-section" id="factorsSection" style="display: none;">
+                    <h3><i class="fas fa-chart-bar"></i> What factors influenced it?</h3>
+                    <div class="factors-chart-container">
+                        <canvas id="factorsChart"></canvas>
+                    </div>
+                    <div class="factors-list" id="factorsList"></div>
+                </div>
+                
+                <!-- Probabilities -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4><i class="fas fa-virus"></i> Dengue Probability</h4>
+                        <div class="value" id="positiveProb">0%</div>
+                        <div class="probability-bar">
+                            <div class="probability-fill dengue" id="positiveBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h4><i class="fas fa-heart"></i> Healthy Probability</h4>
+                        <div class="value" id="negativeProb">0%</div>
+                        <div class="probability-bar">
+                            <div class="probability-fill healthy" id="negativeBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h4><i class="fas fa-flask"></i> Tests Analyzed</h4>
+                        <div class="value" id="totalTests">0</div>
+                        <div class="stat-subtext">Hematological Parameters</div>
+                    </div>
+                    <div class="stat-card">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Abnormal Values</h4>
+                        <div class="value" id="abnormalCount">0</div>
+                        <div class="stat-subtext" id="abnormalPercent">0%</div>
+                    </div>
+                </div>
+                
+                <!-- Report Download Section -->
+                <div class="report-section" id="reportSection" style="display: none;">
+                    <h3><i class="fas fa-file-medical"></i> Medical Report</h3>
+                    <div class="report-info">
+                        <div class="report-id">Report ID: <span id="reportId">-</span></div>
+                        <div class="report-actions">
+                            <button class="btn-report" onclick="downloadReport()" id="generateReportBtn">
+                                <i class="fas fa-file-pdf"></i> Generate Full Report (PDF)
+                            </button>
+                        </div>
+                    </div>
+                    <div class="report-preview">
+                        <h4>Report Preview</h4>
+                        <div class="preview-content">
+                            <div class="preview-item">
+                                <span>Diagnosis:</span>
+                                <strong id="previewDiagnosis">-</strong>
+                            </div>
+                            <div class="preview-item">
+                                <span>Confidence:</span>
+                                <span id="previewConfidence">-</span>
+                            </div>
+                            <div class="preview-item">
+                                <span>Risk Level:</span>
+                                <span id="previewRisk">-</span>
+                            </div>
+                            <div class="preview-item">
+                                <span>Abnormal Values:</span>
+                                <span id="previewAbnormal">-</span>
+                            </div>
+                            <div class="preview-item">
+                                <span>Report Includes:</span>
+                                <span>Complete analysis, clinical recommendations, factor contributions</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Abnormal Values -->
+                <div class="abnormalities-section">
+                    <h3><i class="fas fa-exclamation-circle"></i> Abnormal Values Detected</h3>
+                    <div class="abnormality-list" id="abnormalityList">
+                        <p class="no-data">No abnormalities detected. All values are within normal range.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let factorsChart = null;
+        let currentPredictionData = null;
+        
+        function predictDengue() {
+            // Show loading
+            $('#loading').show();
+            $('#predictionResult').hide();
+            $('#factorsSection').hide();
+            $('#reportSection').hide();
+            $('#downloadBtn').hide();
+            
+            // Collect form data
+            let formData = {};
+            let hasEmpty = false;
+            $('.input-section input, .input-section select').each(function() {
+                let val = $(this).val();
+                if (val === '' || val === null) {
+                    hasEmpty = true;
+                    $(this).addClass('error');
+                } else {
+                    $(this).removeClass('error');
+                    formData[$(this).attr('name')] = val;
+                }
+            });
+            
+            if (hasEmpty) {
+                $('#loading').hide();
+                showNotification('Please fill all required fields', 'error');
+                return;
+            }
+            
+            // Send prediction request
+            $.ajax({
+                url: '/predict',
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    // Hide loading
+                    $('#loading').hide();
+                    
+                    // Store prediction data for report
+                    currentPredictionData = response;
+                    
+                    // Update prediction result
+                    $('#resultText').html(response.prediction);
+                    $('#confidenceValue').text(response.confidence);
+                    $('#reliabilityValue').text(response.reliability);
+                    $('#riskLevel').text(response.risk_level);
+                    
+                    // Update reliability meter
+                    let reliabilityWidth = 0;
+                    switch(response.reliability) {
+                        case 'Very High': reliabilityWidth = 100; break;
+                        case 'High': reliabilityWidth = 75; break;
+                        case 'Moderate': reliabilityWidth = 50; break;
+                        case 'Low': reliabilityWidth = 25; break;
+                        default: reliabilityWidth = 0;
+                    }
+                    $('#reliabilityFill').css('width', reliabilityWidth + '%');
+                    
+                    // Update reliability text color
+                    $('#reliabilityValue').removeClass().addClass('reliability-' + response.reliability.toLowerCase().replace(' ', '-'));
+                    
+                    // Update probabilities
+                    $('#positiveProb').text(response.probability_positive + '%');
+                    $('#negativeProb').text(response.probability_negative + '%');
+                    $('#positiveBar').css('width', response.probability_positive + '%');
+                    $('#negativeBar').css('width', response.probability_negative + '%');
+                    
+                    // Update counts
+                    $('#totalTests').text(response.total_tests);
+                    $('#abnormalCount').text(response.abnormal_count);
+                    let abnormalPercent = Math.round((response.abnormal_count / response.total_tests) * 100);
+                    $('#abnormalPercent').text(abnormalPercent + '%');
+                    
+                    // Update abnormalities list
+                    let abnormalityList = $('#abnormalityList');
+                    abnormalityList.empty();
+                    
+                    if (response.abnormalities.length > 0) {
+                        response.abnormalities.forEach(function(abnormality) {
+                            let item = $('<div class="abnormality-item ' + abnormality.status.toLowerCase() + '"></div>');
+                            item.html(`
+                                <div class="abnormality-header">
+                                    <strong>${abnormality.feature}</strong>
+                                    <span class="abnormality-status ${abnormality.status.toLowerCase()}">${abnormality.status}</span>
+                                </div>
+                                <div class="abnormality-details">
+                                    <span class="abnormality-value">${abnormality.value}</span>
+                                    <span class="abnormality-reference">Ref: ${abnormality.reference}</span>
+                                </div>
+                            `);
+                            abnormalityList.append(item);
+                        });
+                    } else {
+                        abnormalityList.html('<p class="no-data"><i class="fas fa-check-circle"></i> All values within normal range</p>');
+                    }
+                    
+                    // Show factors influencing prediction
+                    if (response.factors && response.factors.length > 0) {
+                        $('#factorsSection').show();
+                        updateFactorsChart(response.factors);
+                        updateFactorsList(response.factors);
+                    }
+                    
+                    // Update report section
+                    $('#reportId').text(response.report_id);
+                    $('#previewDiagnosis').text(response.prediction.replace('⚠️ ', '').replace('✅ ', ''));
+                    $('#previewConfidence').text(response.confidence + '%');
+                    $('#previewRisk').text(response.risk_level);
+                    $('#previewAbnormal').text(response.abnormal_count + '/' + response.total_tests);
+                    $('#reportSection').show();
+                    
+                    // Show download button
+                    $('#downloadBtn').show();
+                    
+                    // Show result with animation
+                    $('#predictionResult').show().css('animation', 'slideIn 0.5s ease');
+                    
+                    // Color coding based on prediction
+                    if (response.prediction_numeric === 1) {
+                        // DENGUE POSITIVE
+                        $('#predictionResult').css('background', 'linear-gradient(135deg, #ff6b6b 0%, #c44569 100%)');
+                        $('#resultText').html('<i class="fas fa-exclamation-triangle"></i> ' + response.prediction);
+                        $('.probability-fill.dengue').css('background', 'linear-gradient(90deg, #ff6b6b, #c44569)');
+                        showNotification('Dengue detected. Please consult a healthcare professional.', 'warning');
+                    } else {
+                        // HEALTHY NEGATIVE
+                        $('#predictionResult').css('background', 'linear-gradient(135deg, #4d96ff 0%, #27ae60 100%)');
+                        $('#resultText').html('<i class="fas fa-check-circle"></i> ' + response.prediction);
+                        $('.probability-fill.healthy').css('background', 'linear-gradient(90deg, #4d96ff, #27ae60)');
+                        showNotification('No dengue detected. All values appear normal.', 'success');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#loading').hide();
+                    showNotification('Error: ' + (xhr.responseJSON?.error || 'Please check all inputs are valid numbers'), 'error');
+                }
+            });
+        }
+        
+        function updateFactorsChart(factors) {
+            const ctx = document.getElementById('factorsChart').getContext('2d');
+            
+            // Destroy previous chart if exists
+            if (factorsChart) {
+                factorsChart.destroy();
+            }
+            
+            // Prepare data
+            const labels = factors.map(f => f.feature.split('(')[0]); // Remove units for brevity
+            const data = factors.map(f => f.contribution);
+            const backgroundColors = factors.map(f => {
+                if (f.direction === 'low' && f.impact === 'HIGH') return '#ff6b6b';
+                if (f.direction === 'high' && f.impact === 'HIGH') return '#ffa726';
+                if (f.direction === 'low' || f.direction === 'high') return '#4d96ff';
+                return '#27ae60';
+            });
+            
+            factorsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Contribution Score',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: backgroundColors.map(c => c.replace('0.8', '1')),
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const factor = factors[context.dataIndex];
+                                    return [
+                                        `Contribution: ${factor.contribution}%`,
+                                        `Value: ${factor.value} (${factor.direction})`,
+                                        `Impact: ${factor.impact}`,
+                                        `Status: ${factor.status}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Contribution Score (%)'
+                            },
+                            max: Math.max(...data) * 1.2
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateFactorsList(factors) {
+            const factorsList = $('#factorsList');
+            factorsList.empty();
+            
+            factors.forEach(factor => {
+                const item = $(`
+                    <div class="factor-item factor-${factor.impact.toLowerCase()}">
+                        <div class="factor-header">
+                            <strong>${factor.feature}</strong>
+                            <span class="factor-impact ${factor.impact.toLowerCase()}">${factor.impact}</span>
+                        </div>
+                        <div class="factor-details">
+                            <div class="factor-value">
+                                <span class="label">Value:</span>
+                                <span class="value ${factor.direction}">${factor.value}</span>
+                                <span class="direction">(${factor.direction})</span>
+                            </div>
+                            <div class="factor-normal">
+                                <span class="label">Normal:</span>
+                                <span class="value">${factor.normal}</span>
+                            </div>
+                            <div class="factor-contribution">
+                                <span class="label">Contribution:</span>
+                                <span class="value">${factor.contribution}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                factorsList.append(item);
+            });
+        }
+        
+        function downloadReport() {
+            if (!currentPredictionData) {
+                showNotification('Please make a prediction first', 'error');
+                return;
+            }
+            
+            // Show loading on button
+            const btn = $('#generateReportBtn');
+            const originalHtml = btn.html();
+            btn.html('<i class="fas fa-spinner fa-spin"></i> Generating PDF...');
+            btn.prop('disabled', true);
+            
+            // Send request to generate PDF
+            $.ajax({
+                url: '/generate_report',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(currentPredictionData),
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(blob, status, xhr) {
+                    // Create download link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentPredictionData.report_id}_report.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    // Reset button
+                    btn.html(originalHtml);
+                    btn.prop('disabled', false);
+                    
+                    // Show success notification
+                    showNotification('Report downloaded successfully!', 'success');
+                },
+                error: function(xhr, status, error) {
+                    console.error('PDF download error:', error);
+                    btn.html(originalHtml);
+                    btn.prop('disabled', false);
+                    showNotification('Error generating PDF report', 'error');
+                }
+            });
+        }
+        
+        function showNotification(message, type) {
+            const notification = $(`
+                <div class="notification notification-${type}">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'}"></i>
+                    <span>${message}</span>
+                    <button class="notification-close" onclick="$(this).parent().remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+            
+            $('#notificationContainer').append(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.fadeOut(300, function() {
+                    $(this).remove();
+                });
+            }, 5000);
+        }
+        
+        function resetForm() {
+            $('.input-section input, .input-section select').each(function() {
+                $(this).val('');
+                if ($(this).is('select')) {
+                    $(this).prop('selectedIndex', 0);
+                }
+            });
+            
+            $('#predictionResult').hide();
+            $('#factorsSection').hide();
+            $('#reportSection').hide();
+            $('#downloadBtn').hide();
+            $('#abnormalityList').html('<p class="no-data">No abnormalities detected. All values are within normal range.</p>');
+            $('#positiveProb').text('0%');
+            $('#negativeProb').text('0%');
+            $('#positiveBar').css('width', '0%');
+            $('#negativeBar').css('width', '0%');
+            $('#totalTests').text('0');
+            $('#abnormalCount').text('0');
+            $('#abnormalPercent').text('0%');
+            
+            // Reset stored data
+            currentPredictionData = null;
+            
+            // Destroy chart if exists
+            if (factorsChart) {
+                factorsChart.destroy();
+                factorsChart = null;
+            }
+            
+            showNotification('Form reset successfully', 'info');
+        }
+        
+        $(document).ready(function() {
+            // Set default values for testing
+            setDefaultValues();
+        });
+        
+        function setDefaultValues() {
+            // Set some default values for testing
+            let defaults = {
+                'RBC': 4.2,
+                'Hemoglobin(g/dl)': 12.5,
+                'HCT(%)': 38,
+                'RDW-CV(%)': 15,
+                'Total WBC count(/cumm)': 3000,
+                'Neutrophils(%)': 75,
+                'Total Platelet Count(/cumm)': 120000,
+                'Age': 35,
+                'Gender': 1
+            };
+            
+            for (let key in defaults) {
+                $('#' + key.replace(/[()/]/g, '')).val(defaults[key]);
+            }
+        }
+    </script>
+</body>
+</html>
